@@ -14,6 +14,13 @@ from htbuilder.funcs import rgba, rgb
 from pathlib import Path
 import base64
 import time
+from datetime import date, datetime
+from pandas import read_csv
+from pandas import to_datetime
+from pandas import DataFrame
+from fbprophet import Prophet
+from matplotlib import pyplot
+from sklearn.metrics import mean_absolute_error
 
 
 
@@ -131,6 +138,32 @@ def get_chart(data):
 
 st.title("EDHEC - Time series playground 🧪")
 
+st.markdown(
+    """
+    [<img src='data:image/png;base64,{}' class='img-fluid' width=25 height=25>](https://github.com/gaetanbrison/nlp) <small> app-predictive-analytics 1.0.0 | May 2022</small>""".format(
+        img_to_bytes("./images/github.png")
+    ),
+    unsafe_allow_html=True,
+)
+
+
+
+
+start_date = st.date_input(
+        "Select start date",
+        date(2017, 8, 1),
+        min_value=datetime.strptime("2017-08-01", "%Y-%m-%d"),
+        max_value=datetime.now(),
+    )
+
+
+
+
+
+
+
+
+
 list_dataframes = []
 for i in range(0,len(symbols)):
     df_data = pdr.get_data_yahoo(symbols[i])
@@ -142,8 +175,15 @@ for i in range(0,len(symbols)):
     list_dataframes.append(df_inter)
 
 df_master = pd.concat(list_dataframes).reset_index(drop=True)
+df_master = df_master[df_master['date'] > pd.to_datetime(start_date)]
 
-st.subheader("Show  Time Series visual")
+
+
+st.subheader("01 - Show  Time Series visual")
+
+
+
+
 
 chart = get_chart(df_master)
 
@@ -151,7 +191,7 @@ chart = get_chart(df_master)
 # Display both charts together
 st.altair_chart((chart).interactive(), use_container_width=True)
 
-st.subheader("Show  Dataset")
+st.subheader("02 - Show  Dataset")
 
 head = st.radio('View from top (head) or bottom (tail)', ('Head', 'Tail'))
 
@@ -162,29 +202,155 @@ if head == 'Head':
 else:
     st.dataframe(df_master.tail(100))
 
+
+
+st.subheader("03 - Forecast Prediction")
+
+
+st.header("Select Symbol to Forecast")
+symbol_forecast = st.selectbox("", symbols)
+
+
+df_data_2 = pdr.get_data_yahoo(symbol_forecast)
+df_inter_2 = pd.DataFrame(
+        {'symbol': [symbol_forecast]*len(list(df_data_2.index)),
+        'date': list(df_data_2.index),
+        kpi: list(df_data_2[kpi])
+        })
+
+
+df_inter_3 = df_inter_2[['date', kpi]]
+df_inter_3.columns = ['date', kpi]
+df_inter_3 = df_inter_3.rename(columns={'date': 'ds', kpi: 'y'})
+df_inter_3['ds']= to_datetime(df_inter_3['ds'])
+# define the model
+model = Prophet()
+# fit the model
+model.fit(df_inter_3)
+# define the period for which we want a prediction
+future = list()
+for i in range(5, 13):
+	date = '2022-%02d' % i
+	future.append([date])
+future = DataFrame(future)
+future.columns = ['ds']
+future['ds']= to_datetime(future['ds'])
+# use the model to make a forecast
+forecast = model.predict(future)
+# summarize the forecast
+print(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].head())
+# plot forecast
+fig1 = model.plot(forecast)
+st.write(fig1)
+
+
+st.subheader("04 - Forecast Prediction - Actual vs Prediction")
+
+st.write("Predictions values in dataset format")
+df_train = df_inter_3[['ds', 'y']].iloc[:150]
+df_predict = df_inter_3[['ds']]
+
+# Fitting a Prophet model
+model = Prophet()
+model.fit(df_train)
+forecast = model.predict(df_predict)
+st.write(forecast.head())
+ax = (df_inter_3.plot(x='ds',y='y',figsize=(20,5),title='Actual Vs Forecast'))
+forecast.plot(x='ds',y='yhat',figsize=(20,5),title='Actual vs Forecast', ax=ax)
+#fig3 = model.plot(forecast["ds","y","yhat"]) # Prophet's plot method creates a prediction graph
+#st.write(fig3)
+
+st.subheader("05 - Model Parameter Decomposition")
+# Plotting the forecast components.
+fig4 = model.plot_components(forecast)
+st.write(fig4)
+
+
 snippet = f"""
 
-        >>> import pandas as pd
-        >>> import numpy as  as np
-        >>> import nltk
+## Import Packages    
 
-        >>> doc = nlp(df["Review"][0])
-        >>> list_text = []
-        >>> list_pos = []
-        >>> list_lemma = []
-        >>> list_lemma_ = []
-        >>> for token in doc:
-            >>> list_text.append(token.text)
-            >>> list_pos.append(token.pos_)
-            >>> list_lemma.append(token.lemma)
-            >>> list_lemma_.append(token.lemma_)
-        >>> df_lemmatization = pd.DataFrame('Text': list_text, 'Position': list_pos, 'Unique Code': list_lemma)
-        >>> df_lemmatization
 
-        """
+import pandas as pd
+
+import time
+from datetime import date, datetime
+
+import altair as alt
+from fbprophet import Prophet
+import streamlit as st
+from vega_datasets import data
+import pandas_datareader as pdr
+
+## Visualize time series
+
+
+list_dataframes = []
+for i in range(0,len(symbols)):
+    df_data = pdr.get_data_yahoo(symbols[i])
+    df_inter = pd.DataFrame(
+        'symbol': [symbols[i]]*len(list(df_data.index)),
+        'date': list(df_data.index),
+        kpi: list(df_data[kpi])
+        )
+    list_dataframes.append(df_inter)
+
+df_master = pd.concat(list_dataframes).reset_index(drop=True)
+df_master = df_master[df_master['date'] > pd.to_datetime(start_date)]
+
+chart = get_chart(df_master)
+st.altair_chart((chart).interactive(), use_container_width=True)
+
+## Display underlying dataset
+
+head = st.radio('View from top (head) or bottom (tail)', ('Head', 'Tail'))
+
+if head == 'Head':
+    st.dataframe(df_master.head(100))
+    #
+
+else:
+    st.dataframe(df_master.tail(100))
+
+
+## Forecast
+
+df_data_2 = pdr.get_data_yahoo(symbols[i])
+df_inter_2 = pd.DataFrame(
+        'symbol': [symbols[i]]*len(list(df_data_2.index)),
+        'date': list(df_data_2.index),
+        kpi: list(df_data_2[kpi])
+        )
+
+
+df_inter_3 = df_inter_2[['date', kpi]]
+df_inter_3.columns = ['date', kpi]
+df_inter_3 = df_inter_3.rename(columns='date': 'ds', kpi: 'y')
+df_inter_3['ds']= to_datetime(df_inter_3['ds'])
+
+model = Prophet()
+
+model.fit(df_inter_3)
+
+future = list()
+for i in range(5, 13):
+	date = '2022-%02d' % i
+	future.append([date])
+future = DataFrame(future)
+future.columns = ['ds']
+future['ds']= to_datetime(future['ds'])
+
+forecast = model.predict(future)
+
+print(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].head())
+
+fig1 = model.plot(forecast)
+st.write(fig1)
+
+"""
 code_header_placeholder = st.empty()
 snippet_placeholder = st.empty()
-code_header_placeholder.subheader(f"**Code for the step: 03 - Lemmatization**")
+code_header_placeholder.subheader(f"**06 - Code**")
 snippet_placeholder.code(snippet)
 
 
@@ -200,7 +366,7 @@ st.markdown(" ")
 st.markdown("### ** 👨🏼‍💻 App Contributors: **")
 st.image(['images/gaetan.png'], width=100,caption=["Gaëtan Brison"])
 
-st.markdown(f"####  Link to Project Website [here]({'https://github.com/gaetanbrison'}) 🚀 ")
+st.markdown(f"####  Link to Project Website [here]({'https://github.com/gaetanbrison/app-predictive-analytics'}) 🚀 ")
 
 
 
