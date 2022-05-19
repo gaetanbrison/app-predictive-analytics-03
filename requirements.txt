@@ -20,7 +20,7 @@ pandas-datareader
 Pillow
 
 
-pystan==2.19.1.1
+pystan
 python-dateutil
 pytz
 
